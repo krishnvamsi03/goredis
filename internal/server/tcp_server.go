@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"goredis/common/config"
 	"goredis/common/logger"
-	"io"
+	"goredis/internal/protocol"
 	"net"
 	"time"
 )
@@ -16,6 +16,7 @@ type (
 		cfg    *config.Config
 		ln     net.Listener
 		exit   chan struct{}
+		parser protocol.Parser
 	}
 )
 
@@ -28,6 +29,7 @@ func NewTcpServer(opts ...ServerOption) *tcpserver {
 		cfg:    srvOptions.config,
 		logger: srvOptions.logger,
 		exit:   make(chan struct{}),
+		parser: protocol.NewGrespParser(srvOptions.logger),
 	}
 }
 
@@ -62,7 +64,6 @@ func (tsr *tcpserver) acceptLoop() {
 		if err != nil {
 			select {
 			case <-tsr.exit:
-				tsr.logger.Info("go redis server completed shutdown")
 				return
 			default:
 				tsr.logger.Info(fmt.Sprintf("failed to established connection %s", err.Error()))
@@ -80,19 +81,13 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
 	for {
-		message, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
+
+		err := tsr.parser.Parse(reader)
+		if err != nil {
 			tsr.logger.Error(err)
 			break
 		}
 
-		if err == io.EOF {
-			tsr.logger.Info("eof recieved")
-			break
-		}
-
-		msg := message[:len(message)-1]
-		tsr.logger.Info(fmt.Sprintf("Recieved %s from conn %s", msg, conn.RemoteAddr().String()))
 	}
 
 }
@@ -102,5 +97,6 @@ func (tsr *tcpserver) Stop() {
 	tsr.ln.Close()
 	close(tsr.exit)
 	time.Sleep(10 * time.Second)
+	tsr.logger.Info("go redis server completed shutdown")
 
 }

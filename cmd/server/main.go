@@ -41,6 +41,7 @@ func main() {
 	}()
 
 	<-quit
+	
 	zapLogger.Info("shutdown signal received closing all connections")
 	srv.Stop()
 }
