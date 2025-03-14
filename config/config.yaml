@@ -1,0 +1,5 @@
+log:
+  level: info
+
+srvoptions:
+  port: "6379"
