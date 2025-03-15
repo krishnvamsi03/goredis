@@ -5,7 +5,7 @@ import (
 	"errors"
 	"goredis/common/logger"
 	gerrors "goredis/errors"
-	"goredis/internal/command"
+	"goredis/internal/request"
 	"goredis/internal/tokens"
 	"strconv"
 	"strings"
@@ -25,7 +25,7 @@ func NewGrespParser(logger logger.Logger) *grespProtocolParser {
 	}
 }
 
-func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*command.Command, error) {
+func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, error) {
 
 	commands := []string{}
 
@@ -90,12 +90,12 @@ func (grp *grespProtocolParser) validateCommands(commands []string) error {
 	return nil
 }
 
-func (grp *grespProtocolParser) getCommand(commands []string) (*command.Command, error) {
+func (grp *grespProtocolParser) getCommand(commands []string) (*request.Request, error) {
 
 	commands = commands[1:]
 
 	i := 0
-	cmds := []command.CommandOptions{}
+	cmds := []request.RequestOptions{}
 
 	for i < len(commands) {
 		cmd := commands[i]
@@ -111,7 +111,7 @@ func (grp *grespProtocolParser) getCommand(commands []string) (*command.Command,
 		}
 	}
 
-	cmd := &command.Command{}
+	cmd := &request.Request{}
 
 	for _, cd := range cmds {
 		cd.Apply(cmd)
@@ -125,9 +125,9 @@ func (grp *grespProtocolParser) getCommand(commands []string) (*command.Command,
 	return cmd, nil
 }
 
-func (grp *grespProtocolParser) readContentIfExists(cmd *command.Command, reader *bufio.Reader) error {
+func (grp *grespProtocolParser) readContentIfExists(req *request.Request, reader *bufio.Reader) error {
 
-	if strings.EqualFold(*cmd.Op, string(tokens.SET)) {
+	if strings.EqualFold(*req.Op, string(tokens.SET)) {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return err
@@ -166,7 +166,7 @@ func (grp *grespProtocolParser) readContentIfExists(cmd *command.Command, reader
 		if err != nil {
 			return gerrors.ErrInvalidContentType
 		}
-		cmd.Value = &value
+		req.Value = &value
 	}
 
 	return nil

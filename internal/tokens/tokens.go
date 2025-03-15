@@ -1,6 +1,8 @@
 package tokens
 
-import "goredis/internal/command"
+import (
+	"goredis/internal/request"
+)
 
 // commands
 var (
@@ -19,11 +21,11 @@ var (
 		OP:    {},
 	}
 
-	COMMANDS = map[string]func(string) command.CommandOptions{
-		KEY:       command.WithKey,
-		OP:        command.WithOp,
-		DATA_TYPE: command.WithDataType,
-		EXPR:      command.WithExpr,
+	COMMANDS = map[string]func(string) request.RequestOptions{
+		KEY:       request.WithKey,
+		OP:        request.WithOp,
+		DATA_TYPE: request.WithDataType,
+		EXPR:      request.WithExpr,
 	}
 )
 

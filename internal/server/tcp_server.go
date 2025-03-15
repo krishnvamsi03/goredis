@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"goredis/common/config"
 	"goredis/common/logger"
+	"goredis/internal/event_processor"
 	"goredis/internal/protocol"
 	"io"
 	"net"
@@ -13,11 +14,12 @@ import (
 
 type (
 	tcpserver struct {
-		logger logger.Logger
-		cfg    *config.Config
-		ln     net.Listener
-		exit   chan struct{}
-		parser protocol.Parser
+		logger    logger.Logger
+		cfg       *config.Config
+		ln        net.Listener
+		exit      chan struct{}
+		parser    protocol.Parser
+		eventLoop *event_processor.EventLoop
 	}
 )
 
@@ -27,10 +29,11 @@ func NewTcpServer(opts ...ServerOption) *tcpserver {
 
 	srvOptions := newServerOptions(opts...)
 	return &tcpserver{
-		cfg:    srvOptions.config,
-		logger: srvOptions.logger,
-		exit:   make(chan struct{}),
-		parser: protocol.NewGrespParser(srvOptions.logger),
+		cfg:       srvOptions.config,
+		logger:    srvOptions.logger,
+		exit:      make(chan struct{}),
+		parser:    protocol.NewGrespParser(srvOptions.logger),
+		eventLoop: event_processor.NewEventLoop(srvOptions.logger),
 	}
 }
 
@@ -60,6 +63,10 @@ func (tsr *tcpserver) Start() error {
 }
 
 func (tsr *tcpserver) acceptLoop() {
+
+	tsr.logger.Info("starting event loop")
+	tsr.eventLoop.Start()
+
 	for {
 		conn, err := tsr.ln.Accept()
 		if err != nil {
@@ -83,9 +90,12 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 
 	for {
 
-		_, err := tsr.parser.Parse(reader)
+		req, err := tsr.parser.Parse(reader)
+		event := event_processor.NewEvent(conn)
+
 		if err != nil && err != io.EOF {
-			break
+			tsr.eventLoop.AddEvent(event.WithError(err))
+			continue
 		}
 
 		if err == io.EOF {
@@ -94,7 +104,7 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 			break
 		}
 
-		
+		tsr.eventLoop.AddEvent(event.WithRequest(req))
 	}
 
 }
@@ -103,6 +113,7 @@ func (tsr *tcpserver) Stop() {
 	tsr.logger.Info("closing listner")
 	tsr.ln.Close()
 	close(tsr.exit)
+	tsr.eventLoop.CloseLoop()
 	time.Sleep(10 * time.Second)
 	tsr.logger.Info("go redis server completed shutdown")
 
