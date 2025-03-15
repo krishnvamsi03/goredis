@@ -1,9 +1,12 @@
 package protocol
 
-import "bufio"
+import (
+	"bufio"
+	"goredis/internal/command"
+)
 
 type (
 	Parser interface {
-		Parse(reader *bufio.Reader) error
+		Parse(reader *bufio.Reader) (*command.Command, error)
 	}
 )

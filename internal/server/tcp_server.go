@@ -6,6 +6,7 @@ import (
 	"goredis/common/config"
 	"goredis/common/logger"
 	"goredis/internal/protocol"
+	"io"
 	"net"
 	"time"
 )
@@ -82,12 +83,18 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 
 	for {
 
-		err := tsr.parser.Parse(reader)
-		if err != nil {
-			tsr.logger.Error(err)
+		_, err := tsr.parser.Parse(reader)
+		if err != nil && err != io.EOF {
 			break
 		}
 
+		if err == io.EOF {
+			tsr.logger.Info(fmt.Sprintf("connection closed by client %s", conn.RemoteAddr()))
+			conn.Close()
+			break
+		}
+
+		
 	}
 
 }

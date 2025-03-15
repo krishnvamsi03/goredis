@@ -2,10 +2,12 @@ package protocol
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"goredis/common/logger"
 	gerrors "goredis/errors"
+	"goredis/internal/command"
 	"goredis/internal/tokens"
+	"strconv"
 	"strings"
 )
 
@@ -23,40 +25,149 @@ func NewGrespParser(logger logger.Logger) *grespProtocolParser {
 	}
 }
 
-func (grp *grespProtocolParser) IsStart(line string) error {
-	tkns := strings.Split(line, " ")
+func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*command.Command, error) {
+
+	commands := []string{}
+
+	for i := 0; i < 2; i++ {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// first two lines should not be empty
+		if len(line) == 0 {
+			return nil, gerrors.ErrIncomReqBody
+		}
+
+		commands = append(commands, strings.Split(line, " ")...)
+	}
+
+	err := grp.validateCommands(commands)
+	if err != nil {
+		grp.logger.Error(err)
+		return nil, err
+	}
+
+	cmd, err := grp.getCommand(commands)
+	if err != nil {
+		grp.logger.Error(err)
+		return nil, err
+	}
+
+	err = grp.readContentIfExists(cmd, reader)
+	if err != nil {
+		grp.logger.Error(err)
+		return nil, err
+	}
+
+	emptyLine, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(emptyLine)) > 0 {
+		return nil, gerrors.ErrInvalidProtocol
+	}
+	return cmd, nil
+}
+
+func (grp *grespProtocolParser) validateCommands(commands []string) error {
+
 	cnt := 0
-	for _, token := range tkns {
-		if _, ok := tokens.INIT_TOKENS[token]; ok {
+	for _, cmd := range commands {
+		if _, ok := tokens.MANDATORY_TOKENS[cmd]; ok {
 			cnt += 1
 		}
 	}
 
-	if cnt < len(tokens.INIT_TOKENS) {
-		return gerrors.ErrInvalidProtocol
+	if cnt < len(tokens.MANDATORY_TOKENS) {
+		return gerrors.ErrIncomReqBody
 	}
 
 	return nil
 }
 
-func (grp *grespProtocolParser) Parse(reader *bufio.Reader) error {
+func (grp *grespProtocolParser) getCommand(commands []string) (*command.Command, error) {
 
-	actions := []string{}
+	commands = commands[1:]
 
-	for i := 0; i < 2; i++ {
+	i := 0
+	cmds := []command.CommandOptions{}
+
+	for i < len(commands) {
+		cmd := commands[i]
+		cmd = strings.TrimSpace(cmd)
+		if len(cmd) == 0 {
+			i++
+			continue
+		}
+
+		if f, ok := tokens.COMMANDS[cmd]; ok && i+1 < len(commands) {
+			cmds = append(cmds, f(commands[i+1]))
+			i += 2
+		}
+	}
+
+	cmd := &command.Command{}
+
+	for _, cd := range cmds {
+		cd.Apply(cmd)
+	}
+
+	err := cmd.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	return cmd, nil
+}
+
+func (grp *grespProtocolParser) readContentIfExists(cmd *command.Command, reader *bufio.Reader) error {
+
+	if strings.EqualFold(*cmd.Op, string(tokens.SET)) {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return err
 		}
 
-		// first two lines should not be empty
-		if len(strings.TrimSpace(line)) == 0 {
-			return gerrors.ErrIncomReqBody
+		line = strings.TrimSpace(line)
+		words := strings.Split(line, " ")
+		if len(words) <= 1 {
+			return gerrors.ErrInvalidContentType
+		}
+		if words[0] != tokens.CONTENT_LENGTH {
+			return gerrors.ErrInvalidProtocol
 		}
 
-		actions = append(actions, strings.Split(line, " ")...)
+		contentLen, err := strconv.Atoi(words[1])
+		if err != nil {
+			return errors.Join(gerrors.ErrInvalidProtocol, err)
+		}
+
+		if contentLen == 0 {
+			return gerrors.ErrInvalidContentType
+		}
+
+		i := 0
+		value := ""
+		for i < contentLen {
+			c, err := reader.ReadByte()
+			if err != nil {
+				return gerrors.ErrContentMismatch
+			}
+
+			value += string(c)
+			i += 1
+		}
+		_, err = reader.ReadByte()
+		if err != nil {
+			return gerrors.ErrInvalidContentType
+		}
+		cmd.Value = &value
 	}
 
-	fmt.Println(actions)
 	return nil
 }
