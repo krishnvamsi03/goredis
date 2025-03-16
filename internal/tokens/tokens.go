@@ -2,6 +2,7 @@ package tokens
 
 import (
 	"goredis/internal/request"
+	"strings"
 )
 
 // commands
@@ -9,7 +10,7 @@ var (
 	GRESP          string = "GRESP"
 	KEY            string = "KEY"
 	OP             string = "OP"
-	EXPR           string = "EXPR"
+	TTL            string = "TTL"
 	DATA_TYPE      string = "DATA_TYPE"
 	CONTENT_LENGTH string = "CONTENT_LENGTH"
 )
@@ -25,11 +26,12 @@ var (
 		KEY:       request.WithKey,
 		OP:        request.WithOp,
 		DATA_TYPE: request.WithDataType,
-		EXPR:      request.WithExpr,
+		TTL:       request.WithExpr,
 	}
 )
 
 // instruction
+
 type (
 	INST string
 )
@@ -39,4 +41,12 @@ var (
 	SET   INST = "SET"
 	DEL   INST = "DEL"
 	OEXPR INST = "EXPR"
+	PUSH  INST = "PUSH"
+	POP   INST = "POP"
+	INCR  INST = "INCR"
+	DECR  INST = "DECR"
 )
+
+func (it INST) ToLower() string {
+	return strings.ToLower(string(it))
+}

@@ -6,7 +6,7 @@ type (
 	Request struct {
 		Key      *string
 		Op       *string
-		Expr     *string
+		Ttl      *string
 		Value    *string
 		Datatype *string
 	}
@@ -19,7 +19,7 @@ type (
 )
 
 func (req *Request) Validate() error {
-	if req.Key == nil || req.Op == nil || req.Datatype == nil {
+	if req.Key == nil || req.Op == nil {
 		return gerrors.ErrInvalidCmds
 	}
 	return nil
@@ -39,9 +39,9 @@ func WithKey(key string) RequestOptions {
 	})
 }
 
-func WithExpr(expr string) RequestOptions {
+func WithExpr(ttl string) RequestOptions {
 	return RequestApplyFunc(func(c *Request) {
-		c.Expr = &expr
+		c.Ttl = &ttl
 	})
 }
 

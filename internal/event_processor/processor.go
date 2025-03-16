@@ -17,6 +17,14 @@ func newProcessor() *processor {
 	}
 }
 
+func (p *processor) Start() {
+	p.commandManager.Start()
+}
+
+func (p *processor) Stop() {
+	p.commandManager.Stop()
+}
+
 func (p *processor) Process(event *Event) {
 	if event.err != nil {
 		event.conn.Write([]byte(response.BuildResponseWithError(event.err)))

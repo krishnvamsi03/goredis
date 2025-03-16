@@ -29,23 +29,21 @@ func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, e
 
 	commands := []string{}
 
-	for i := 0; i < 2; i++ {
-		line, err := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
+	line, err := reader.ReadString('\n')
+	line = strings.TrimSpace(line)
 
-		if err != nil {
-			return nil, err
-		}
-
-		// first two lines should not be empty
-		if len(line) == 0 {
-			return nil, gerrors.ErrIncomReqBody
-		}
-
-		commands = append(commands, strings.Split(line, " ")...)
+	if err != nil {
+		return nil, err
 	}
 
-	err := grp.validateCommands(commands)
+	// first line should not be empty
+	if len(line) == 0 {
+		return nil, gerrors.ErrIncomReqBody
+	}
+
+	commands = append(commands, strings.Split(line, " ")...)
+
+	err = grp.validateCommands(commands)
 	if err != nil {
 		grp.logger.Error(err)
 		return nil, err
@@ -105,9 +103,10 @@ func (grp *grespProtocolParser) getCommand(commands []string) (*request.Request,
 			continue
 		}
 
-		if f, ok := tokens.COMMANDS[cmd]; ok && i+1 < len(commands) {
-			cmds = append(cmds, f(commands[i+1]))
-			i += 2
+		i += 1
+		if f, ok := tokens.COMMANDS[cmd]; ok && i < len(commands) {
+			cmds = append(cmds, f(commands[i]))
+			i += 1
 		}
 	}
 
@@ -127,7 +126,8 @@ func (grp *grespProtocolParser) getCommand(commands []string) (*request.Request,
 
 func (grp *grespProtocolParser) readContentIfExists(req *request.Request, reader *bufio.Reader) error {
 
-	if strings.EqualFold(*req.Op, string(tokens.SET)) {
+	switch strings.ToLower(*req.Op) {
+	case tokens.SET.ToLower(), tokens.PUSH.ToLower():
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return err
@@ -168,6 +168,5 @@ func (grp *grespProtocolParser) readContentIfExists(req *request.Request, reader
 		}
 		req.Value = &value
 	}
-
 	return nil
 }

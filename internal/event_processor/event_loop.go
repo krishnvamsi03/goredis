@@ -67,6 +67,7 @@ func (ev *EventLoop) CloseLoop() {
 
 		if !ev.queueClosed {
 			ev.queueClosed = true
+			ev.processor.Stop()
 			close(ev.queue)
 			ev.logger.Info("event loop closed")
 		}
@@ -76,7 +77,9 @@ func (ev *EventLoop) CloseLoop() {
 
 func (ev *EventLoop) Start() {
 	go func() {
+
 		ev.logger.Info("event loop started")
+		ev.processor.Start()
 		for event := range ev.queue {
 			ev.processor.Process(event)
 		}
