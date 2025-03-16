@@ -23,6 +23,7 @@ func NewCommandManager() *CommandManager {
 	kv := store.NewKeyValueStore()
 
 	commands := map[string]Command{
+		constants.PING: NewPingCommand(kv),
 		constants.SET:  NewAddCommand(kv),
 		constants.GET:  NewGetCommand(kv),
 		constants.DEL:  NewDelCommand(kv),

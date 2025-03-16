@@ -1,6 +1,7 @@
 package constants
 
 const (
+	PING string = "PING"
 	GET  string = "GET"
 	SET  string = "SET"
 	DEL  string = "DEL"

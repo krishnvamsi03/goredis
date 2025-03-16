@@ -43,12 +43,6 @@ func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, e
 
 	commands = append(commands, strings.Split(line, " ")...)
 
-	err = grp.validateCommands(commands)
-	if err != nil {
-		grp.logger.Error(err)
-		return nil, err
-	}
-
 	cmd, err := grp.getCommand(commands)
 	if err != nil {
 		grp.logger.Error(err)

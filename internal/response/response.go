@@ -35,7 +35,7 @@ func (res *Response) Build() string {
 		isOk = "OK"
 	}
 
-	response := fmt.Sprintf("GRESP %s %s\n CONTENT_LENGTH %d\n %s", isOk, res.code, len(res.res), res.res)
+	response := fmt.Sprintf("GRESP %s %s\nCONTENT_LENGTH %d\n%s\n", isOk, res.code, len(res.res), res.res)
 	return response
 }
 

@@ -60,6 +60,13 @@ func (kv *KeyValueStore) Close() {
 	kv.ttlDone <- true
 }
 
+func (kv *KeyValueStore) Ping(req request.Request) *response.Response {
+	return response.NewResponse().
+		WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("PONG")
+}
+
 func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()

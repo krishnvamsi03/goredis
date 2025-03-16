@@ -19,7 +19,7 @@ type (
 )
 
 func (req *Request) Validate() error {
-	if req.Key == nil || req.Op == nil {
+	if req.Op == nil {
 		return gerrors.ErrInvalidCmds
 	}
 	return nil
