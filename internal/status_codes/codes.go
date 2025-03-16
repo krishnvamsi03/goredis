@@ -9,4 +9,5 @@ const (
 	KEY_DOES_NOT_EXISTS                string = "4004"
 	INVALID_INP                        string = "4005"
 	OPERATION_NOT_ALLOWED_FOR_DATATYPE string = "4006"
+	UNKNOWN_COMMAND                    string = "4007"
 )

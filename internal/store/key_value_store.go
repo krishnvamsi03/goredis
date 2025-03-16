@@ -7,6 +7,7 @@ import (
 	"goredis/internal/response"
 	statuscodes "goredis/internal/status_codes"
 	"goredis/internal/utils"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -107,6 +108,50 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).
 		WithRes("1")
+}
+
+func (kv *KeyValueStore) GetKey(req request.Request) *response.Response {
+
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
+
+	if *req.Key == "*" {
+		keys := ""
+		for key := range kv.store {
+			keys += fmt.Sprintf("%s\n", key)
+		}
+
+		keys = strings.TrimSpace(keys)
+		return response.NewResponse().WithCode(statuscodes.SUCCESS).WithOk(true).WithRes(keys)
+	}
+
+	validPattPattern := `^\*?[a-zA-Z0-9_]+(:[a-zA-Z0-9_]*)?\*?$`
+
+	re := regexp.MustCompile(validPattPattern)
+	if !re.MatchString(*req.Key) {
+		return response.NewResponse().
+			WithCode(statuscodes.INVALID_INP).
+			WithOk(false).
+			WithRes("only * wildcard is allowed")
+	}
+
+	res := ""
+	keyRe := regexp.MustCompile(fmt.Sprintf("^%s", *req.Key))
+	for key := range kv.store {
+		if keyRe.MatchString(key) {
+			res = fmt.Sprintf("%s\n", key)
+		}
+	}
+
+	res = strings.TrimSpace(res)
+	return response.NewResponse().
+		WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes(res)
 }
 
 func (kv *KeyValueStore) Get(req request.Request) *response.Response {

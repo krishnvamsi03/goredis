@@ -4,6 +4,7 @@ import (
 	"goredis/internal/constants"
 	"goredis/internal/request"
 	"goredis/internal/response"
+	statuscodes "goredis/internal/status_codes"
 	"goredis/internal/store"
 )
 
@@ -32,6 +33,7 @@ func NewCommandManager() *CommandManager {
 		constants.POP:  NewPopCommand(kv),
 		constants.INCR: NewIncrCommand(kv),
 		constants.DECR: NewDecrCommand(kv),
+		constants.KEYS: NewGetKeyCommand(kv),
 	}
 
 	return &CommandManager{
@@ -50,6 +52,12 @@ func (cm *CommandManager) Stop() {
 
 func (cm *CommandManager) Execute(req request.Request) *response.Response {
 
-	command := cm.commands[*req.Op]
+	command, ok := cm.commands[*req.Op]
+	if !ok {
+		return response.NewResponse().
+			WithCode(statuscodes.UNKNOWN_COMMAND).
+			WithOk(false).
+			WithRes("unknown command")
+	}
 	return command.Execute(req)
 }

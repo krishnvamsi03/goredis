@@ -10,4 +10,5 @@ const (
 	PUSH string = "PUSH"
 	POP  string = "POP"
 	EXPR string = "EXPR"
+	KEYS string = "KEYS"
 )
