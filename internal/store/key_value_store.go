@@ -74,10 +74,10 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 
 	response := response.NewResponse()
 
-	if req.Key == nil || req.Ttl == nil || req.Value == nil || req.Datatype == nil {
+	if req.Key == nil || req.Value == nil || req.Datatype == nil {
 		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
 			WithOk(false).
-			WithRes("either key, ttl, datatype or value is missing for setting value")
+			WithRes("either key, datatype or value is missing for setting value")
 	}
 
 	dt := strings.ToUpper(*req.Datatype)
@@ -105,6 +105,14 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	value.datatype = dt
 	kv.store[*req.Key] = value
 
+	if req.Ttl != nil {
+		err := kv.setExpireTime(req.Key, req.Ttl)
+		if err != nil {
+			return response.WithCode(statuscodes.INVALID_INP).
+				WithOk(false).
+				WithRes("failed to set ttl")
+		}
+	}
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).
 		WithRes("1")
