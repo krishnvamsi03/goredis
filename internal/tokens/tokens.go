@@ -18,7 +18,6 @@ var (
 var (
 	MANDATORY_TOKENS = map[string]struct{}{
 		GRESP: {},
-		KEY:   {},
 		OP:    {},
 	}
 

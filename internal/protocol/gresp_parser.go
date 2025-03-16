@@ -43,6 +43,11 @@ func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, e
 
 	commands = append(commands, strings.Split(line, " ")...)
 
+	err = grp.validateCommands(commands)
+	if err != nil {
+		return nil, err
+	}
+
 	cmd, err := grp.getCommand(commands)
 	if err != nil {
 		grp.logger.Error(err)
@@ -55,14 +60,6 @@ func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, e
 		return nil, err
 	}
 
-	emptyLine, err := reader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	if len(strings.TrimSpace(emptyLine)) > 0 {
-		return nil, gerrors.ErrInvalidProtocol
-	}
 	return cmd, nil
 }
 
@@ -128,39 +125,76 @@ func (grp *grespProtocolParser) readContentIfExists(req *request.Request, reader
 		}
 
 		line = strings.TrimSpace(line)
-		words := strings.Split(line, " ")
-		if len(words) <= 1 {
-			return gerrors.ErrInvalidContentType
+		value, err := grp.readContent(line, reader)
+		if err != nil {
+			return err
 		}
-		if words[0] != tokens.CONTENT_LENGTH {
+		req.Value = value
+	case tokens.POP.ToLower():
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+
+		line = strings.TrimSpace(line)
+		emptyValue := ""
+		if len(line) == 0 {
+			req.Value = &emptyValue
+			return nil
+		}
+
+		value, err := grp.readContent(line, reader)
+		if err != nil {
+			return err
+		}
+		req.Value = value
+
+	default:
+		emptyLine, err := reader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+
+		if len(strings.TrimSpace(emptyLine)) > 0 {
 			return gerrors.ErrInvalidProtocol
 		}
-
-		contentLen, err := strconv.Atoi(words[1])
-		if err != nil {
-			return errors.Join(gerrors.ErrInvalidProtocol, err)
-		}
-
-		if contentLen == 0 {
-			return gerrors.ErrInvalidContentType
-		}
-
-		i := 0
-		value := ""
-		for i < contentLen {
-			c, err := reader.ReadByte()
-			if err != nil {
-				return gerrors.ErrContentMismatch
-			}
-
-			value += string(c)
-			i += 1
-		}
-		_, err = reader.ReadByte()
-		if err != nil {
-			return gerrors.ErrInvalidContentType
-		}
-		req.Value = &value
 	}
 	return nil
+}
+
+func (grp *grespProtocolParser) readContent(line string, reader *bufio.Reader) (*string, error) {
+
+	words := strings.Split(line, " ")
+	if len(words) <= 1 {
+		return nil, gerrors.ErrInvalidContentType
+	}
+	if words[0] != tokens.CONTENT_LENGTH {
+		return nil, gerrors.ErrInvalidProtocol
+	}
+
+	contentLen, err := strconv.Atoi(words[1])
+	if err != nil {
+		return nil, errors.Join(gerrors.ErrInvalidProtocol, err)
+	}
+
+	if contentLen == 0 {
+		return nil, gerrors.ErrInvalidContentType
+	}
+
+	i := 0
+	value := ""
+	for i < contentLen {
+		c, err := reader.ReadByte()
+		if err != nil {
+			return nil, gerrors.ErrContentMismatch
+		}
+
+		value += string(c)
+		i += 1
+	}
+	_, err = reader.ReadByte()
+	if err != nil {
+		return nil, gerrors.ErrInvalidContentType
+	}
+	return &value, nil
 }
