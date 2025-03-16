@@ -2,6 +2,7 @@ package command
 
 import (
 	"goredis/internal/request"
+	"goredis/internal/response"
 	"goredis/internal/store"
 )
 
@@ -17,6 +18,6 @@ func NewIncrCommand(kv *store.KeyValueStore) Command {
 	}
 }
 
-func (ic *IncrCommand) Execute(req request.Request) (*string, error) {
+func (ic *IncrCommand) Execute(req request.Request) *response.Response {
 	return ic.kv.Incr(req)
 }

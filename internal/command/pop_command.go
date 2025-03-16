@@ -2,6 +2,7 @@ package command
 
 import (
 	"goredis/internal/request"
+	"goredis/internal/response"
 	"goredis/internal/store"
 )
 
@@ -17,6 +18,6 @@ func NewPopCommand(kv *store.KeyValueStore) Command {
 	}
 }
 
-func (pp *PopCommand) Execute(req request.Request) (*string, error) {
+func (pp *PopCommand) Execute(req request.Request) *response.Response {
 	return pp.kv.Pop(req)
 }

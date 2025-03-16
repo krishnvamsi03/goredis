@@ -2,6 +2,7 @@ package command
 
 import (
 	"goredis/internal/request"
+	"goredis/internal/response"
 	"goredis/internal/store"
 )
 
@@ -17,6 +18,6 @@ func NewPushCommand(kv *store.KeyValueStore) Command {
 	}
 }
 
-func (pc *PushCommand) Execute(req request.Request) (*string, error) {
+func (pc *PushCommand) Execute(req request.Request) *response.Response {
 	return pc.kv.Push(req)
 }

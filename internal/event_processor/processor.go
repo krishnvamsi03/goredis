@@ -3,6 +3,7 @@ package event_processor
 import (
 	"goredis/internal/command"
 	"goredis/internal/response"
+	statuscodes "goredis/internal/status_codes"
 )
 
 type (
@@ -27,17 +28,12 @@ func (p *processor) Stop() {
 
 func (p *processor) Process(event *Event) {
 	if event.err != nil {
-		event.conn.Write([]byte(response.BuildResponseWithError(event.err)))
+		res := response.NewResponse().WithCode(statuscodes.INVALID_PROTOCOL).WithOk(false).WithRes(event.err.Error())
+		event.conn.Write([]byte(res.Build()))
 		return
 	}
 
-	res, err := p.commandManager.Execute(*event.cmd)
+	res := p.commandManager.Execute(*event.cmd)
 
-	if err != nil {
-		msg := response.BuildResponseWithError(err)
-		event.conn.Write([]byte(msg))
-		return
-	}
-
-	event.conn.Write([]byte(response.BuildResponseWithMsg(*res)))
+	event.conn.Write([]byte(res.Build()))
 }

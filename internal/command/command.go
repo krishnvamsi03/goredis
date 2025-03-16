@@ -3,12 +3,13 @@ package command
 import (
 	"goredis/internal/constants"
 	"goredis/internal/request"
+	"goredis/internal/response"
 	"goredis/internal/store"
 )
 
 type (
 	Command interface {
-		Execute(request.Request) (*string, error)
+		Execute(request.Request) *response.Response
 	}
 
 	CommandManager struct {
@@ -46,7 +47,7 @@ func (cm *CommandManager) Stop() {
 	cm.kv.Close()
 }
 
-func (cm *CommandManager) Execute(req request.Request) (*string, error) {
+func (cm *CommandManager) Execute(req request.Request) *response.Response {
 
 	command := cm.commands[*req.Op]
 	return command.Execute(req)

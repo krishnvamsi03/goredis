@@ -2,6 +2,7 @@ package command
 
 import (
 	"goredis/internal/request"
+	"goredis/internal/response"
 	"goredis/internal/store"
 )
 
@@ -17,6 +18,6 @@ func NewAddCommand(kv *store.KeyValueStore) Command {
 	}
 }
 
-func (ac *AddCommand) Execute(req request.Request) (*string, error) {
+func (ac *AddCommand) Execute(req request.Request) *response.Response {
 	return ac.kvStore.Add(req)
 }

@@ -2,6 +2,43 @@ package response
 
 import "fmt"
 
+type (
+	Response struct {
+		code string
+		isOk bool
+		res  string
+	}
+)
+
+func NewResponse() *Response {
+	return &Response{}
+}
+
+func (res *Response) WithCode(code string) *Response {
+	res.code = code
+	return res
+}
+
+func (res *Response) WithOk(isOk bool) *Response {
+	res.isOk = isOk
+	return res
+}
+
+func (res *Response) WithRes(result string) *Response {
+	res.res = result
+	return res
+}
+
+func (res *Response) Build() string {
+	isOk := "NOT_OK"
+	if res.isOk {
+		isOk = "OK"
+	}
+
+	response := fmt.Sprintf("GRESP %s %s\n CONTENT_LENGTH %d\n %s", isOk, res.code, len(res.res), res.res)
+	return response
+}
+
 func BuildResponseWithError(err error) string {
 	return "GRESP NOT_OK\n" + fmt.Sprintf("CONTENT_LENGTH %d\n", len(err.Error())) + fmt.Sprintf("%s\n", err.Error())
 }

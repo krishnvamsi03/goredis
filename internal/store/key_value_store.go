@@ -1,10 +1,11 @@
 package store
 
 import (
-	"errors"
-	gerrors "goredis/errors"
+	"fmt"
 	"goredis/internal/constants"
 	"goredis/internal/request"
+	"goredis/internal/response"
+	statuscodes "goredis/internal/status_codes"
 	"goredis/internal/utils"
 	"strconv"
 	"strings"
@@ -36,6 +37,10 @@ var (
 	}
 )
 
+const (
+	KEY_DOES_NOT_EXIST_MSG = "key does not exists or expired"
+)
+
 func NewKeyValueStore() *KeyValueStore {
 	return &KeyValueStore{
 		store:      make(map[string]*Value, 1000),
@@ -55,208 +60,274 @@ func (kv *KeyValueStore) Close() {
 	kv.ttlDone <- true
 }
 
-func (kv *KeyValueStore) Add(req request.Request) (*string, error) {
+func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
+	response := response.NewResponse()
+
 	if req.Key == nil || req.Ttl == nil || req.Value == nil || req.Datatype == nil {
-		return nil, gerrors.ErrRequiredParamsMissingSet
+		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("either key, ttl, datatype or value is missing for setting value")
 	}
 
 	dt := strings.ToUpper(*req.Datatype)
 	if _, ok := allowedDataTypes[dt]; !ok {
-		return nil, gerrors.ErrInvalidDatatypes
+		return response.WithCode(statuscodes.DATA_TYPE_NOT_ALLOWED).
+			WithOk(false).
+			WithRes("data type not supported allowed are str, list, int.")
 	}
 
 	value := &Value{}
-	success := "1"
-	if strings.EqualFold(*req.Datatype, constants.LIST) {
+	switch dt {
+	case constants.LIST:
 		value.values = strings.Split(*req.Value, ",")
-		success = strconv.Itoa(len(value.values))
-	} else {
-		if strings.EqualFold(*req.Datatype, constants.INT) {
-			_, err := strconv.Atoi(*req.Value)
-			if err != nil {
-				return nil, errors.New("not an integer for integer datatype")
-			}
+	case constants.INT:
+		_, err := strconv.Atoi(*req.Value)
+		if err != nil {
+			return response.WithCode(statuscodes.INVALID_VALUE_FOR_DATATYPE).
+				WithOk(false).
+				WithRes("invalid value provided for given data type")
 		}
-
+	default:
 		value.value = *req.Value
 	}
 
 	value.datatype = dt
-
 	kv.store[*req.Key] = value
+
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("1")
+}
+
+func (kv *KeyValueStore) Get(req request.Request) *response.Response {
+	kv.storeLock.Lock()
+	defer kv.storeLock.Unlock()
+
+	kv.deleteKeyAtTime(*req.Key)
+	response := response.NewResponse()
+
+	if _, ok := kv.store[*req.Key]; !ok {
+		return kv.keyDoesNotExistRes()
+	}
+
+	value := kv.store[*req.Key]
+
+	res := ""
+	switch value.datatype {
+	case constants.LIST:
+		res = strings.Join(value.values, ",")
+	default:
+		res = value.value
+	}
+
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes(res)
+}
+
+func (kv *KeyValueStore) Delete(req request.Request) *response.Response {
+	kv.storeLock.Lock()
+	defer kv.storeLock.Unlock()
+
+	kv.deleteKeyAtTime(*req.Key)
+
+	response := response.NewResponse()
+
+	if _, ok := kv.store[*req.Key]; !ok {
+		return response.WithCode(statuscodes.SUCCESS).
+			WithOk(true).
+			WithRes("0")
+	}
+
+	kv.deleteKeys(*req.Key)
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("1")
+}
+
+func (kv *KeyValueStore) SetExpiration(req request.Request) *response.Response {
+	kv.storeLock.Lock()
+	defer kv.storeLock.Unlock()
+
+	kv.deleteKeyAtTime(*req.Key)
+	_, ok := kv.store[*req.Key]
+	if !ok {
+		return kv.keyDoesNotExistRes()
+	}
+
+	response := response.NewResponse()
 
 	err := kv.setExpireTime(req.Key, req.Ttl)
 	if err != nil {
-		return nil, err
+		return response.WithCode(statuscodes.INVALID_INP).
+			WithOk(false).
+			WithRes("failed to set ttl")
 	}
-	return &success, nil
+
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("1")
 }
 
-func (kv *KeyValueStore) Get(req request.Request) (*string, error) {
+func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
 	kv.deleteKeyAtTime(*req.Key)
 
-	if value, ok := kv.store[*req.Key]; ok {
-		if value.datatype == constants.LIST {
-			res := strings.Join(value.values, ",")
-			return &res, nil
-		}
-		return &value.value, nil
-	}
-
-	return nil, errors.New("key does not exists")
-}
-
-func (kv *KeyValueStore) Delete(req request.Request) (*string, error) {
-	kv.storeLock.Lock()
-	defer kv.storeLock.Unlock()
-
-	kv.deleteKeyAtTime(*req.Key)
-
-	if _, ok := kv.store[*req.Key]; ok {
-		kv.deleteKeys(*req.Key)
-	}
-
-	res := "1"
-	return &res, nil
-}
-
-func (kv *KeyValueStore) SetExpiration(req request.Request) (*string, error) {
-	kv.storeLock.Lock()
-	defer kv.storeLock.Unlock()
-
-	kv.deleteKeyAtTime(*req.Key)
-
-	if _, ok := kv.store[*req.Key]; ok {
-		err := kv.setExpireTime(req.Key, req.Ttl)
-		if err != nil {
-			return nil, err
-		}
-
-		res := "1"
-		return &res, nil
-	}
-
-	return nil, errors.New("key does not exists")
-}
-
-func (kv *KeyValueStore) Push(req request.Request) (*string, error) {
-	kv.storeLock.Lock()
-	defer kv.storeLock.Unlock()
-
-	kv.deleteKeyAtTime(*req.Key)
+	response := response.NewResponse()
 
 	if req.Value == nil {
-		return nil, errors.New("expected value to push")
+		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("value is missing for pushing to list")
 	}
 
 	if _, ok := kv.store[*req.Key]; !ok {
-		return nil, errors.New("key does not exists")
+		return kv.keyDoesNotExistRes()
 	}
 
 	storedValue := kv.store[*req.Key]
 	if storedValue.datatype != constants.LIST {
-		return nil, errors.New("invalid operation push allowd on list only")
+		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
+			WithOk(false).
+			WithRes("push cannot be performed on Non List type")
 	}
 
-	storedValue.values = append(storedValue.values, *req.Value)
+	values := strings.Split(*req.Value, ",")
+	for _, v := range values {
+		storedValue.values = append(storedValue.values, strings.TrimSpace(v))
+	}
 	kv.store[*req.Value] = storedValue
-	res := "1"
-	return &res, nil
+
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes(fmt.Sprintf("%d", len(values)))
 }
 
-func (kv *KeyValueStore) Pop(req request.Request) (*string, error) {
+func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
+	kv.deleteKeyAtTime(*req.Key)
+	response := response.NewResponse()
+
 	if req.Value == nil {
-		return nil, errors.New("expected no of elements to pop")
+		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("value is missing for pop from list")
 	}
 
-	kv.deleteKeyAtTime(*req.Key)
-
 	if _, ok := kv.store[*req.Key]; !ok {
-		return nil, errors.New("key does not exists")
+		return kv.keyDoesNotExistRes()
 	}
 
 	storedValue := kv.store[*req.Key]
 	if storedValue.datatype != constants.LIST {
-		return nil, errors.New("invalid operation pop allowed on list only")
+		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
+			WithOk(false).
+			WithRes("pop cannot be performed on Non List type")
 	}
 
 	values := strings.Split(*req.Value, " ")
 	dir, ele := strings.TrimSpace(values[0]), strings.TrimSpace(values[1])
-	if utils.IsEmpty(dir) || utils.IsEmpty(ele) {
-		return nil, errors.New("no of elements or direction to pop")
+	if utils.IsEmpty(dir) {
+		dir = "R"
 	}
+	if utils.IsEmpty(ele) {
+		ele = "1"
+	}
+
 	noOfEle, err := strconv.Atoi(ele)
 	if err != nil {
-		return nil, err
+		return response.WithCode(statuscodes.INVALID_INP).
+			WithOk(false).
+			WithRes("failed to convert to int")
 	}
+	if !strings.EqualFold(dir, "L") && !strings.EqualFold(dir, "R") {
+		return response.WithCode(statuscodes.INVALID_INP).
+			WithOk(false).
+			WithRes("either l or r is needed")
+	}
+
+	cnt := 0
 	if strings.EqualFold(dir, "L") {
 		for noOfEle > 0 && len(storedValue.values) > 0 {
 			storedValue.values = storedValue.values[1:]
+			noOfEle--
+			cnt++
 		}
 	} else {
 		for noOfEle > 0 && len(storedValue.values) > 0 {
 			storedValue.values = storedValue.values[:len(storedValue.values)-1]
+			noOfEle--
+			cnt++
 		}
 	}
 
-	res := "1"
-	return &res, nil
+	kv.store[*req.Key] = storedValue
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes(fmt.Sprintf("%d", cnt))
 }
 
-func (kv *KeyValueStore) Incr(req request.Request) (*string, error) {
+func (kv *KeyValueStore) Incr(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
 	kv.deleteKeyAtTime(*req.Key)
 
 	if _, ok := kv.store[*req.Key]; !ok {
-		return nil, errors.New("key does not exists")
+		return kv.keyDoesNotExistRes()
 	}
 
+	response := response.NewResponse()
 	storedValue := kv.store[*req.Key]
 	if storedValue.datatype != constants.INT {
-		return nil, errors.New("invalid operation incr allowed on int only")
+		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
+			WithOk(false).
+			WithRes("incr can apply on int types only")
 	}
 
 	val, _ := strconv.Atoi(storedValue.value)
 	val += 1
 	storedValue.value = strconv.Itoa(val)
 	kv.store[*req.Key] = storedValue
-	res := "1"
-	return &res, nil
+
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("1")
 }
 
-func (kv *KeyValueStore) Decr(req request.Request) (*string, error) {
+func (kv *KeyValueStore) Decr(req request.Request) *response.Response {
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
 	kv.deleteKeyAtTime(*req.Key)
 
 	if _, ok := kv.store[*req.Key]; !ok {
-		return nil, errors.New("key does not exists")
+		return kv.keyDoesNotExistRes()
 	}
+
+	response := response.NewResponse()
 
 	storedValue := kv.store[*req.Key]
 	if storedValue.datatype != constants.INT {
-		return nil, errors.New("invalid operation decr allowed on int only")
+		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
+			WithOk(false).
+			WithRes("decr can apply on int types only")
 	}
 
 	val, _ := strconv.Atoi(storedValue.value)
 	val -= 1
 	storedValue.value = strconv.Itoa(val)
 	kv.store[*req.Key] = storedValue
-	res := "1"
-
-	return &res, nil
+	return response.WithCode(statuscodes.SUCCESS).
+		WithOk(true).
+		WithRes("1")
 }
 
 func (kv *KeyValueStore) setExpireTime(key, ttl *string) error {
@@ -306,4 +377,10 @@ func (kv *KeyValueStore) deleteKeys(keys ...string) {
 		delete(kv.store, key)
 		delete(kv.ttlTracker, key)
 	}
+}
+
+func (kv *KeyValueStore) keyDoesNotExistRes() *response.Response {
+	return response.NewResponse().WithCode(statuscodes.KEY_DOES_NOT_EXISTS).
+		WithOk(false).
+		WithRes(KEY_DOES_NOT_EXIST_MSG)
 }
