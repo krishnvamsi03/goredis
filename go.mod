@@ -5,6 +5,7 @@ go 1.22.5
 require (
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

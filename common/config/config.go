@@ -10,6 +10,7 @@ type (
 	Config struct {
 		Loginfo       Loginfo       `yaml:"log"`
 		ServerOptions ServerOptions `yaml:"srvoptions"`
+		PersistentOptions PersistentOptions `yaml:"persistent"`
 	}
 
 	Loginfo struct {
@@ -18,6 +19,11 @@ type (
 
 	ServerOptions struct {
 		Port string `yaml:"port"`
+	}
+
+	PersistentOptions struct {
+		Interval int `yaml:"interval"`
+		Unit string `yaml:"unit"`
 	}
 )
 

@@ -89,7 +89,7 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
 	for {
-
+		
 		req, err := tsr.parser.Parse(reader)
 		event := event_processor.NewEvent(conn)
 
@@ -111,10 +111,10 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 
 func (tsr *tcpserver) Stop() {
 	tsr.logger.Info("closing listner")
-	tsr.ln.Close()
 	close(tsr.exit)
-	tsr.eventLoop.CloseLoop()
 	time.Sleep(10 * time.Second)
+	tsr.eventLoop.CloseLoop()
+	tsr.ln.Close()
 	tsr.logger.Info("go redis server completed shutdown")
 
 }

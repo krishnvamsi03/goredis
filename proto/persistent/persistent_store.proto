@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package persistent;
+
+option go_package = "goredis/persistent";
+
+message PersistentStore {
+    int64 created_at_unix = 1;
+    string created_at = 2;
+    KeyValueStore kv = 3;
+}
+
+message KeyValueStore {
+    map<string, Value> store = 1;
+}
+
+message Value {
+    string value = 1;
+    repeated string values = 2;
+    string datatype = 3;
+}
