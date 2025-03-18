@@ -1,24 +1,30 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
+	"goredis/common/logger"
 	"goredis/internal/constants"
 	"goredis/internal/request"
 	"goredis/internal/response"
 	statuscodes "goredis/internal/status_codes"
 	"goredis/internal/utils"
+	"goredis/proto/persistent"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
 
 type (
 	Value struct {
-		value    string
-		values   []string
-		datatype string
+		Value    string   `json:"value"`
+		Values   []string `json:"Values"`
+		Datatype string   `json:"datatype"`
 	}
 
 	KeyValueStore struct {
@@ -27,6 +33,7 @@ type (
 		ticker     *time.Ticker
 		ttlTracker map[string]int64
 		ttlDone    chan bool
+		logger     logger.Logger
 	}
 )
 
@@ -77,7 +84,7 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	if req.Key == nil || req.Value == nil || req.Datatype == nil {
 		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
 			WithOk(false).
-			WithRes("either key, datatype or value is missing for setting value")
+			WithRes("either key, Datatype or value is missing for setting value")
 	}
 
 	dt := strings.ToUpper(*req.Datatype)
@@ -90,7 +97,7 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	value := &Value{}
 	switch dt {
 	case constants.LIST:
-		value.values = strings.Split(*req.Value, ",")
+		value.Values = strings.Split(*req.Value, ",")
 	case constants.INT:
 		_, err := strconv.Atoi(*req.Value)
 		if err != nil {
@@ -99,10 +106,10 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 				WithRes("invalid value provided for given data type")
 		}
 	default:
-		value.value = *req.Value
+		value.Value = *req.Value
 	}
 
-	value.datatype = dt
+	value.Datatype = dt
 	kv.store[*req.Key] = value
 
 	if req.Ttl != nil {
@@ -176,11 +183,11 @@ func (kv *KeyValueStore) Get(req request.Request) *response.Response {
 	value := kv.store[*req.Key]
 
 	res := ""
-	switch value.datatype {
+	switch value.Datatype {
 	case constants.LIST:
-		res = strings.Join(value.values, ",")
+		res = strings.Join(value.Values, ",")
 	default:
-		res = value.value
+		res = value.Value
 	}
 
 	return response.WithCode(statuscodes.SUCCESS).
@@ -251,21 +258,21 @@ func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 	}
 
 	storedValue := kv.store[*req.Key]
-	if storedValue.datatype != constants.LIST {
+	if storedValue.Datatype != constants.LIST {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
 			WithOk(false).
 			WithRes("push cannot be performed on Non List type")
 	}
 
-	values := strings.Split(*req.Value, ",")
-	for _, v := range values {
-		storedValue.values = append(storedValue.values, strings.TrimSpace(v))
+	Values := strings.Split(*req.Value, ",")
+	for _, v := range Values {
+		storedValue.Values = append(storedValue.Values, strings.TrimSpace(v))
 	}
 	kv.store[*req.Value] = storedValue
 
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).
-		WithRes(fmt.Sprintf("%d", len(values)))
+		WithRes(fmt.Sprintf("%d", len(Values)))
 }
 
 func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
@@ -286,14 +293,14 @@ func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 	}
 
 	storedValue := kv.store[*req.Key]
-	if storedValue.datatype != constants.LIST {
+	if storedValue.Datatype != constants.LIST {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
 			WithOk(false).
 			WithRes("pop cannot be performed on Non List type")
 	}
 
-	values := strings.Split(*req.Value, " ")
-	dir, ele := strings.TrimSpace(values[0]), strings.TrimSpace(values[1])
+	Values := strings.Split(*req.Value, " ")
+	dir, ele := strings.TrimSpace(Values[0]), strings.TrimSpace(Values[1])
 	if utils.IsEmpty(dir) {
 		dir = "R"
 	}
@@ -315,14 +322,14 @@ func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 
 	cnt := 0
 	if strings.EqualFold(dir, "L") {
-		for noOfEle > 0 && len(storedValue.values) > 0 {
-			storedValue.values = storedValue.values[1:]
+		for noOfEle > 0 && len(storedValue.Values) > 0 {
+			storedValue.Values = storedValue.Values[1:]
 			noOfEle--
 			cnt++
 		}
 	} else {
-		for noOfEle > 0 && len(storedValue.values) > 0 {
-			storedValue.values = storedValue.values[:len(storedValue.values)-1]
+		for noOfEle > 0 && len(storedValue.Values) > 0 {
+			storedValue.Values = storedValue.Values[:len(storedValue.Values)-1]
 			noOfEle--
 			cnt++
 		}
@@ -346,15 +353,15 @@ func (kv *KeyValueStore) Incr(req request.Request) *response.Response {
 
 	response := response.NewResponse()
 	storedValue := kv.store[*req.Key]
-	if storedValue.datatype != constants.INT {
+	if storedValue.Datatype != constants.INT {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
 			WithOk(false).
 			WithRes("incr can apply on int types only")
 	}
 
-	val, _ := strconv.Atoi(storedValue.value)
+	val, _ := strconv.Atoi(storedValue.Value)
 	val += 1
-	storedValue.value = strconv.Itoa(val)
+	storedValue.Value = strconv.Itoa(val)
 	kv.store[*req.Key] = storedValue
 
 	return response.WithCode(statuscodes.SUCCESS).
@@ -375,15 +382,15 @@ func (kv *KeyValueStore) Decr(req request.Request) *response.Response {
 	response := response.NewResponse()
 
 	storedValue := kv.store[*req.Key]
-	if storedValue.datatype != constants.INT {
+	if storedValue.Datatype != constants.INT {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
 			WithOk(false).
 			WithRes("decr can apply on int types only")
 	}
 
-	val, _ := strconv.Atoi(storedValue.value)
+	val, _ := strconv.Atoi(storedValue.Value)
 	val -= 1
-	storedValue.value = strconv.Itoa(val)
+	storedValue.Value = strconv.Itoa(val)
 	kv.store[*req.Key] = storedValue
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).
@@ -443,4 +450,43 @@ func (kv *KeyValueStore) keyDoesNotExistRes() *response.Response {
 	return response.NewResponse().WithCode(statuscodes.KEY_DOES_NOT_EXISTS).
 		WithOk(false).
 		WithRes(KEY_DOES_NOT_EXIST_MSG)
+}
+
+func (kv *KeyValueStore) Persist() error {
+
+	kv.storeLock.Lock()
+	defer kv.storeLock.Unlock()
+	
+	byteData, err := json.Marshal(kv.store)
+	if err != nil {
+		kv.logger.Error(err)
+		return err
+	}
+
+	var persistentStore map[string]*persistent.Value
+	err = json.Unmarshal(byteData, &persistentStore)
+	if err != nil {
+		kv.logger.Error(err)
+		return err
+	}
+
+	store := &persistent.PersistentStore{
+		CreatedAtUnix: time.Now().Unix(),
+		CreatedAt:     time.Now().Format(time.RFC3339),
+		Kv: &persistent.KeyValueStore{
+			Store: persistentStore,
+		},
+	}
+
+	serialData, err := proto.Marshal(store)
+	if err != nil {
+		kv.logger.Error(err)
+		return err
+	}
+	err = os.WriteFile("kv.bin", serialData, 0664)
+	if err != nil {
+		kv.logger.Error(err)
+		return err
+	}
+	return nil
 }

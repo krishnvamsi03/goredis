@@ -20,6 +20,7 @@ type (
 
 const (
 	defaultSnapInterval int = 10
+	defaultRetry        int = 3
 )
 
 func WithKv(store *KeyValueStore) persistentOpt {
@@ -72,8 +73,17 @@ func (per *Persistent) PersistData() {
 			case <-per.exit:
 				return
 			case <-per.intervalTicker.C:
-				per.logger.Info("taking kv snapshot")
+				per.logger.Info("taking kv store snapshot")
 
+				for i := 0; i < defaultRetry; i++ {
+					err := per.kvStore.Persist()
+					if err != nil {
+						per.logger.Error(err)
+						continue
+					}
+					per.logger.Info("snapshot succesful!!")
+					break
+				}
 			}
 		}
 	}()
