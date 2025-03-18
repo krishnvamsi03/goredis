@@ -3,7 +3,11 @@ package main
 import (
 	"goredis/common/config"
 	"goredis/common/logger"
+	"goredis/internal/command"
+	"goredis/internal/event_processor"
+	"goredis/internal/protocol"
 	"goredis/internal/server"
+	"goredis/internal/store"
 	"log"
 	"os"
 	"os/signal"
@@ -30,9 +34,29 @@ func main() {
 		os.Exit(0)
 	}
 
-	zapLogger.Info("go redis server is ready to accept connections")
+	kvStore := store.NewKeyValueStore(zapLogger)
+	commanManger := command.NewCommandManager(kvStore)
+	persist := store.NewPeristent(
+		store.WithLogger(zapLogger),
+		store.WithPersistenOpts(&cfg.PersistentOptions),
+		store.WithKv(kvStore),
+	)
 
-	srv := server.NewTcpServer(server.WithConfig(cfg), server.WithLogger(zapLogger))
+	processor := event_processor.NewProcessor(commanManger)
+
+	el := event_processor.NewEventLoop(
+		event_processor.WithProcessor(processor),
+		event_processor.WithLogger(zapLogger),
+		event_processor.WithPersistent(persist),
+	)
+
+	srv := server.NewTcpServer(server.WithConfig(cfg),
+		server.WithLogger(zapLogger),
+		server.WithParser(protocol.NewGrespParser(zapLogger)),
+		server.WithEventLoop(el),
+	)
+
+	zapLogger.Info("go redis server is ready to accept connections")
 
 	go func() {
 		if err := srv.Start(); err != nil {

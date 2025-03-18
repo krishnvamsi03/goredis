@@ -19,9 +19,7 @@ type (
 	}
 )
 
-func NewCommandManager() *CommandManager {
-
-	kv := store.NewKeyValueStore()
+func NewCommandManager(kv *store.KeyValueStore) *CommandManager {
 
 	commands := map[string]Command{
 		constants.PING: NewPingCommand(kv),
@@ -40,14 +38,6 @@ func NewCommandManager() *CommandManager {
 		kv:       kv,
 		commands: commands,
 	}
-}
-
-func (cm *CommandManager) Start() {
-	cm.kv.InitKvStore()
-}
-
-func (cm *CommandManager) Stop() {
-	cm.kv.Close()
 }
 
 func (cm *CommandManager) Execute(req request.Request) *response.Response {

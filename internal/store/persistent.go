@@ -1,9 +1,14 @@
 package store
 
 import (
+	"encoding/json"
 	"goredis/common/config"
 	"goredis/common/logger"
+	"goredis/proto/persistent"
+	"os"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -76,7 +81,7 @@ func (per *Persistent) PersistData() {
 				per.logger.Info("taking kv store snapshot")
 
 				for i := 0; i < defaultRetry; i++ {
-					err := per.kvStore.Persist()
+					err := per.kvStore.Persist(per.persistentOptions.Path)
 					if err != nil {
 						per.logger.Error(err)
 						continue
@@ -87,6 +92,45 @@ func (per *Persistent) PersistData() {
 			}
 		}
 	}()
+}
+
+func (per *Persistent) LoadData() error {
+
+	byteData, err := os.ReadFile(per.persistentOptions.Path)
+	if err != nil {
+		if _, ok := err.(*os.PathError); ok {
+			return nil
+		}
+		per.logger.Error(err)
+		return err
+	}
+
+	var kvData persistent.PersistentStore
+	err = proto.Unmarshal(byteData, &kvData)
+	if err != nil {
+		per.logger.Error(err)
+		return err
+	}
+
+	store := kvData.GetKv().GetStore()
+	storeBytes, err := json.Marshal(store)
+	if err != nil {
+		per.logger.Error(err)
+		return err
+	}
+
+	var kvStoreDeserial map[string]*Value
+	err = json.Unmarshal(storeBytes, &kvStoreDeserial)
+	if err != nil {
+		per.logger.Error(err)
+		return err
+	}
+
+	if len(kvStoreDeserial) > 0 {
+		per.kvStore.store = kvStoreDeserial
+		per.logger.Info("successfully loaded data from disk")
+	}
+	return nil
 }
 
 func (per *Persistent) Close() {

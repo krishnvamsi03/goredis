@@ -32,8 +32,8 @@ func NewTcpServer(opts ...ServerOption) *tcpserver {
 		cfg:       srvOptions.config,
 		logger:    srvOptions.logger,
 		exit:      make(chan struct{}),
-		parser:    protocol.NewGrespParser(srvOptions.logger),
-		eventLoop: event_processor.NewEventLoop(srvOptions.logger),
+		eventLoop: srvOptions.eventLoop,
+		parser:    srvOptions.parser,
 	}
 }
 
@@ -58,15 +58,14 @@ func (tsr *tcpserver) Start() error {
 
 	tsr.ln = ln
 
+	tsr.logger.Info("starting event loop")
+	tsr.eventLoop.Start()
+
 	tsr.acceptLoop()
 	return nil
 }
 
 func (tsr *tcpserver) acceptLoop() {
-
-	tsr.logger.Info("starting event loop")
-	tsr.eventLoop.Start()
-
 	for {
 		conn, err := tsr.ln.Accept()
 		if err != nil {
@@ -89,7 +88,7 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
 	for {
-		
+
 		req, err := tsr.parser.Parse(reader)
 		event := event_processor.NewEvent(conn)
 

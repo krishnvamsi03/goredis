@@ -8,8 +8,8 @@ import (
 
 type (
 	Config struct {
-		Loginfo       Loginfo       `yaml:"log"`
-		ServerOptions ServerOptions `yaml:"srvoptions"`
+		Loginfo           Loginfo           `yaml:"log"`
+		ServerOptions     ServerOptions     `yaml:"srvoptions"`
 		PersistentOptions PersistentOptions `yaml:"persistent"`
 	}
 
@@ -22,8 +22,9 @@ type (
 	}
 
 	PersistentOptions struct {
-		Interval int `yaml:"interval"`
-		Unit string `yaml:"unit"`
+		Interval int    `yaml:"interval"`
+		Unit     string `yaml:"unit"`
+		Path     string `yaml:"path"`
 	}
 )
 

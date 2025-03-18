@@ -5,6 +5,6 @@ srvoptions:
   port: "6379"
 
 persistent:
-  snapshot:
-    interval: 10
-    unit: "s"
+  interval: 10
+  unit: "s"
+  path: "kv.bkp"

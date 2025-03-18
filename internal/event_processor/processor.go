@@ -7,23 +7,21 @@ import (
 )
 
 type (
+	Processor interface {
+		Process(event *Event)
+	}
+
 	processor struct {
 		commandManager *command.CommandManager
 	}
 )
 
-func newProcessor() *processor {
+var _ Processor = (*processor)(nil)
+
+func NewProcessor(cm *command.CommandManager) *processor {
 	return &processor{
-		commandManager: command.NewCommandManager(),
+		commandManager: cm,
 	}
-}
-
-func (p *processor) Start() {
-	p.commandManager.Start()
-}
-
-func (p *processor) Stop() {
-	p.commandManager.Stop()
 }
 
 func (p *processor) Process(event *Event) {

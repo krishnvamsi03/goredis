@@ -35,6 +35,8 @@ type (
 		ttlDone    chan bool
 		logger     logger.Logger
 	}
+
+	KeyValueStoreOpt func(*KeyValueStore)
 )
 
 var (
@@ -49,18 +51,15 @@ const (
 	KEY_DOES_NOT_EXIST_MSG = "key does not exists or expired"
 )
 
-func NewKeyValueStore() *KeyValueStore {
+func NewKeyValueStore(logger logger.Logger) *KeyValueStore {
 	return &KeyValueStore{
 		store:      make(map[string]*Value, 1000),
 		storeLock:  &sync.Mutex{},
 		ticker:     time.NewTicker(time.Second * 1),
 		ttlTracker: make(map[string]int64),
 		ttlDone:    make(chan bool),
+		logger:     logger,
 	}
-}
-
-func (kv *KeyValueStore) InitKvStore() {
-	kv.clearExpiredKeys()
 }
 
 func (kv *KeyValueStore) Close() {
@@ -452,11 +451,11 @@ func (kv *KeyValueStore) keyDoesNotExistRes() *response.Response {
 		WithRes(KEY_DOES_NOT_EXIST_MSG)
 }
 
-func (kv *KeyValueStore) Persist() error {
+func (kv *KeyValueStore) Persist(path string) error {
 
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
-	
+
 	byteData, err := json.Marshal(kv.store)
 	if err != nil {
 		kv.logger.Error(err)
@@ -483,7 +482,7 @@ func (kv *KeyValueStore) Persist() error {
 		kv.logger.Error(err)
 		return err
 	}
-	err = os.WriteFile("kv.bin", serialData, 0664)
+	err = os.WriteFile(path, serialData, 0664)
 	if err != nil {
 		kv.logger.Error(err)
 		return err
