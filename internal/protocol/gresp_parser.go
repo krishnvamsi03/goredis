@@ -196,5 +196,14 @@ func (grp *grespProtocolParser) readContent(line string, reader *bufio.Reader) (
 	if err != nil {
 		return nil, gerrors.ErrInvalidContentType
 	}
+
+	emptyLine, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(emptyLine)) > 0 {
+		return nil, gerrors.ErrInvalidProtocol
+	}
 	return &value, nil
 }

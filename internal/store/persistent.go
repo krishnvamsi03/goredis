@@ -76,6 +76,8 @@ func (per *Persistent) PersistData() {
 		for {
 			select {
 			case <-per.exit:
+				per.intervalTicker.Stop()
+				per.logger.Info("persitent data snapshot closed")
 				return
 			case <-per.intervalTicker.C:
 				per.logger.Info("taking kv store snapshot")
@@ -86,7 +88,7 @@ func (per *Persistent) PersistData() {
 						per.logger.Error(err)
 						continue
 					}
-					per.logger.Info("snapshot succesful!!")
+					per.logger.Info("snapshot succesfull")
 					break
 				}
 			}

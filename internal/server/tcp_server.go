@@ -111,7 +111,7 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 func (tsr *tcpserver) Stop() {
 	tsr.logger.Info("closing listner")
 	close(tsr.exit)
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 	tsr.eventLoop.CloseLoop()
 	tsr.ln.Close()
 	tsr.logger.Info("go redis server completed shutdown")

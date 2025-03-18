@@ -62,6 +62,10 @@ func NewKeyValueStore(logger logger.Logger) *KeyValueStore {
 	}
 }
 
+func (kv *KeyValueStore) Start() {
+	kv.clearExpiredKeys()
+}
+
 func (kv *KeyValueStore) Close() {
 	kv.ticker.Stop()
 	kv.ttlDone <- true
@@ -419,6 +423,7 @@ func (kv *KeyValueStore) clearExpiredKeys() {
 		for {
 			select {
 			case <-kv.ttlDone:
+				kv.ticker.Stop()
 				return
 			case t := <-kv.ticker.C:
 				for key, value := range kv.ttlTracker {

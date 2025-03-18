@@ -6,6 +6,7 @@ import (
 	"goredis/internal/store"
 	"net"
 	"sync"
+	"time"
 )
 
 type (
@@ -18,13 +19,14 @@ type (
 	EventOption func(*Event)
 
 	EventLoop struct {
-		queue       chan *Event
-		queueClosed bool
-		queueLock   *sync.Mutex
-		quitch      chan struct{}
-		logger      logger.Logger
-		processor   *processor
-		persistent  *store.Persistent
+		queue         chan *Event
+		queueClosed   bool
+		queueLock     *sync.Mutex
+		quitch        chan struct{}
+		logger        logger.Logger
+		processor     *processor
+		persistent    *store.Persistent
+		keyvalueStore *store.KeyValueStore
 	}
 
 	EventLoopOption func(*EventLoop)
@@ -79,6 +81,12 @@ func WithPersistent(persist *store.Persistent) EventLoopOption {
 	}
 }
 
+func WithKeyValueStore(kv *store.KeyValueStore) EventLoopOption {
+	return func(el *EventLoop) {
+		el.keyvalueStore = kv
+	}
+}
+
 func (ev *EventLoop) AddEvent(event *Event) {
 	if ev.queueClosed {
 		return
@@ -91,9 +99,12 @@ func (ev *EventLoop) CloseLoop() {
 		ev.queueLock.Lock()
 		defer ev.queueLock.Unlock()
 		ev.persistent.Close()
+		ev.keyvalueStore.Close()
+
 		if !ev.queueClosed {
 			ev.queueClosed = true
 			close(ev.queue)
+			time.Sleep(3 * time.Second)
 			ev.logger.Info("event loop closed")
 		}
 	}
@@ -107,6 +118,7 @@ func (ev *EventLoop) Start() {
 	}
 
 	ev.persistent.PersistData()
+	ev.keyvalueStore.Start()
 
 	go func() {
 

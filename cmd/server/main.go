@@ -48,6 +48,7 @@ func main() {
 		event_processor.WithProcessor(processor),
 		event_processor.WithLogger(zapLogger),
 		event_processor.WithPersistent(persist),
+		event_processor.WithKeyValueStore(kvStore),
 	)
 
 	srv := server.NewTcpServer(server.WithConfig(cfg),
