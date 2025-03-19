@@ -478,7 +478,8 @@ func (kv *KeyValueStore) Persist(path string) error {
 		CreatedAtUnix: time.Now().Unix(),
 		CreatedAt:     time.Now().Format(time.RFC3339),
 		Kv: &persistent.KeyValueStore{
-			Store: persistentStore,
+			Store:      persistentStore,
+			TtlTracker: kv.ttlTracker,
 		},
 	}
 

@@ -12,6 +12,7 @@ message PersistentStore {
 
 message KeyValueStore {
     map<string, Value> store = 1;
+    map<string, int64> ttlTracker = 2;
 }
 
 message Value {
