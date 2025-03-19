@@ -54,3 +54,11 @@ fmt:
 	fi
 
 check: fmt lint
+
+build-cli:
+	@echo "building goredis client"
+	@CGO_ENABLED=0 go build -o goredis cmd/cli/main.go
+
+run-cli:
+	@go run cmd/cli/main.go
+	

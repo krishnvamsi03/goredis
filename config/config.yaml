@@ -5,6 +5,6 @@ srvoptions:
   port: "6379"
 
 persistent:
-  interval: 10
-  unit: "s"
-  path: "kv.bkp"
+  interval: 1
+  unit: "m"
+  path: "kvdb.dmp"

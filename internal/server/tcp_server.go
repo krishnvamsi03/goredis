@@ -86,7 +86,8 @@ func (tsr *tcpserver) acceptLoop() {
 func (tsr *tcpserver) handleConn(conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
-
+	defer conn.Close()
+	
 	for {
 
 		req, err := tsr.parser.Parse(reader)

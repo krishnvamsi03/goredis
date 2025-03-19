@@ -1,0 +1,170 @@
+package client
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+)
+
+type (
+	Client struct {
+		address string
+		port    int
+		conn    net.Conn
+	}
+
+	ClientOpt func(*Client)
+)
+
+func WithAddress(address string) ClientOpt {
+	return func(c *Client) {
+		c.address = address
+	}
+}
+
+func WithPort(port int) ClientOpt {
+	return func(c *Client) {
+		c.port = port
+	}
+}
+
+func NewClient(clientOpts ...ClientOpt) *Client {
+
+	client := &Client{}
+
+	for _, opt := range clientOpts {
+		opt(client)
+	}
+
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", client.address, client.port))
+	if err != nil {
+		panic(err)
+	}
+	client.conn = conn
+	return client
+}
+
+func (cli *Client) Start() {
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	reader := bufio.NewReader(os.Stdin)
+	conReader := bufio.NewReader(cli.conn)
+
+	defer cli.conn.Close()
+
+	go func() {
+		<-quit
+		cli.conn.Close()
+		fmt.Print("quitting goredis bye!")
+		os.Exit(0)
+	}()
+
+	fmt.Println("welcome to goredis")
+	for {
+		fmt.Print("> ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("error reading input, please try again")
+			continue
+		}
+
+		if len(strings.TrimSpace(input)) == 0 {
+			continue
+		}
+
+		if strings.TrimSpace(input) == "quit" {
+			fmt.Println("quitting goredis bye!")
+			break
+		}
+
+		cmd, err := cli.validateInp(input)
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+
+		requestBody := cli.buildRequest(cmd)
+		_, err = cli.conn.Write([]byte(requestBody))
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		response := ""
+		for i := 0; i < 3; i++ {
+			res, err := conReader.ReadString('\n')
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+			response += res
+		}
+
+		fmt.Println(cli.parseResponse(response))
+	}
+}
+
+func (cli *Client) validateInp(inp string) (*command, error) {
+
+	inps := strings.Split(inp, " ")
+	for idx, value := range inps {
+		inps[idx] = strings.TrimSpace(value)
+	}
+
+	switch inps[0] {
+	case "GET":
+		if len(inp) <= 1 {
+			return nil, ErrInvalidArgs
+		}
+
+		return &command{
+			op:  inps[0],
+			key: inps[1],
+		}, nil
+	case "SET":
+		if len(inp) <= 4 {
+			return nil, ErrInvalidArgs
+		}
+
+		return &command{
+			op:       inps[0],
+			key:      inps[1],
+			value:    inps[2],
+			datatype: inps[3],
+			ttl:      inps[4],
+		}, nil
+	default:
+		return nil, ErrInvalidCommand
+	}
+}
+
+func (cli *Client) buildRequest(cmd *command) string {
+
+	switch cmd.op {
+	case "GET":
+		return fmt.Sprintf("GRESP OP GET KEY %s\n\n", cmd.key)
+	case "SET":
+		body := fmt.Sprintf("GRESP OP SET KEY %s DATA_TYPE %s TTL %s\n", cmd.key, cmd.datatype, cmd.ttl)
+		body += fmt.Sprintf("CONTENT_LENGTH %d\n", len(cmd.value))
+		body += fmt.Sprintf("%s\n\n", cmd.value)
+		return body
+	default:
+		return ""
+	}
+
+}
+
+func (cli *Client) parseResponse(response string) string {
+
+	lines := strings.Split(response, "\n")
+	if len(lines) < 3 {
+		return "invalid response received from server"
+	}
+
+	return lines[2]
+}
