@@ -78,7 +78,7 @@ func (tsr *tcpserver) acceptLoop() {
 			}
 		}
 
-		tsr.logger.Info(fmt.Sprintf("Recieved connection from %s", conn.RemoteAddr().String()))
+		tsr.logger.Info(fmt.Sprintf("recieved connection from %s", conn.RemoteAddr().String()))
 		go tsr.handleConn(conn)
 	}
 }
@@ -87,7 +87,7 @@ func (tsr *tcpserver) handleConn(conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 	defer conn.Close()
-	
+
 	for {
 
 		req, err := tsr.parser.Parse(reader)

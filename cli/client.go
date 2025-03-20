@@ -67,7 +67,7 @@ func (cli *Client) Start() {
 		os.Exit(0)
 	}()
 
-	fmt.Println("welcome to goredis")
+	fmt.Println("welcome to goredis, type quit to exit")
 	for {
 		fmt.Print("> ")
 		input, err := reader.ReadString('\n')
@@ -193,6 +193,35 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			op:  inps[0],
 			key: inps[1],
 		}, nil
+	case "POP":
+		if len(inps) <= 1 {
+			return nil, ErrInvalidCommand
+		}
+		cmd := &command{
+			op:  inps[0],
+			key: inps[1],
+		}
+		if len(inps) >= 3 {
+			cmd.value = fmt.Sprintf("%s %s", inps[2], inps[3])
+		}
+		return cmd, nil
+	case "INCR":
+		if len(inps) <= 1 {
+			return nil, ErrInvalidArgs
+		}
+
+		return &command{
+			op:  inps[0],
+			key: inps[1],
+		}, nil
+	case "DECR":
+		if len(inps) <= 1 {
+			return nil, ErrInvalidArgs
+		}
+		return &command{
+			op:  inps[0],
+			key: inps[1],
+		}, nil
 	default:
 		return nil, ErrInvalidCommand
 	}
@@ -217,6 +246,18 @@ func (cli *Client) buildRequest(cmd *command) string {
 		body += fmt.Sprintf("CONTENT_LENGTH %d\n", len(cmd.value))
 		body += fmt.Sprintf("%s\n\n", cmd.value)
 		return body
+	case "POP":
+		body := fmt.Sprintf("GRESP OP POP KEY %s\n", cmd.key)
+		if len(cmd.value) > 0 {
+			body += fmt.Sprintf("CONTENT_LENGTH %d\n", len(cmd.value))
+			body += fmt.Sprintf("%s\n", cmd.value)
+		}
+		body += "\n"
+		return body
+	case "INCR":
+		return fmt.Sprintf("GRESP OP INCR KEY %s\n\n", cmd.key)
+	case "DECR":
+		return fmt.Sprintf("GRESP OP DECR KEY %s \n\n", cmd.key)
 	case "KEYS":
 		return fmt.Sprintf("GRESP OP KEYS KEY %s\n\n", cmd.key)
 	default:

@@ -299,8 +299,14 @@ func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 			WithRes("pop cannot be performed on Non List type")
 	}
 
-	Values := strings.Split(*req.Value, " ")
-	dir, ele := strings.TrimSpace(Values[0]), strings.TrimSpace(Values[1])
+	dir, ele := "", ""
+	if req.Value != nil && len(strings.TrimSpace(*req.Value)) > 0 {
+		values := strings.Split(*req.Value, " ")
+		if len(values) > 0 {
+			dir, ele = values[0], values[1]
+		}
+	}
+
 	if utils.IsEmpty(dir) {
 		dir = "R"
 	}

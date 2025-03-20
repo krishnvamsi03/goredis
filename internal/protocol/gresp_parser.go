@@ -7,6 +7,7 @@ import (
 	gerrors "goredis/errors"
 	"goredis/internal/request"
 	"goredis/internal/tokens"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -56,6 +57,9 @@ func (grp *grespProtocolParser) Parse(reader *bufio.Reader) (*request.Request, e
 
 	err = grp.readContentIfExists(cmd, reader)
 	if err != nil {
+		if err == io.EOF {
+			return nil, err
+		}
 		grp.logger.Error(err)
 		return nil, err
 	}
