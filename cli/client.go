@@ -3,9 +3,11 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"goredis/internal/tokens"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -96,16 +98,39 @@ func (cli *Client) Start() {
 			continue
 		}
 		response := ""
-		for i := 0; i < 3; i++ {
+		contentLength := 0
+		for i := 0; i < 2; i++ {
 			res, err := conReader.ReadString('\n')
 			if err != nil {
 				fmt.Println(err)
 				break
 			}
 			response += res
+			cnt := strings.Split(res, " ")
+			if len(cnt) >= 2 && strings.TrimSpace(cnt[0]) == tokens.CONTENT_LENGTH {
+				contentLength, _ = strconv.Atoi(strings.TrimSpace(cnt[1]))
+			}
 		}
 
-		fmt.Println(cli.parseResponse(response))
+		content := ""
+		for contentLength > 0 {
+			ch, err := conReader.ReadByte()
+			if err != nil {
+				fmt.Println(err.Error())
+				break
+			}
+
+			content += string(ch)
+			contentLength -= 1
+		}
+		_, err = conReader.ReadByte()
+		if err != nil {
+			fmt.Println(err.Error())
+			break
+		}
+		response += content
+
+		fmt.Println(cli.parseResponse(cmd.op, response))
 	}
 }
 
@@ -117,8 +142,12 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 	}
 
 	switch inps[0] {
+	case "PING":
+		return &command{
+			op: inps[0],
+		}, nil
 	case "GET":
-		if len(inp) <= 1 {
+		if len(inps) <= 1 {
 			return nil, ErrInvalidArgs
 		}
 
@@ -127,7 +156,7 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			key: inps[1],
 		}, nil
 	case "SET":
-		if len(inp) <= 4 {
+		if len(inps) <= 4 {
 			return nil, ErrInvalidArgs
 		}
 
@@ -138,6 +167,32 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			datatype: inps[3],
 			ttl:      inps[4],
 		}, nil
+	case "DEL":
+		if len(inps) <= 1 {
+			return nil, ErrInvalidArgs
+		}
+		return &command{
+			op:  inps[0],
+			key: inps[1],
+		}, nil
+	case "PUSH":
+		if len(inps) <= 2 {
+			return nil, ErrInvalidArgs
+		}
+
+		return &command{
+			op:    inps[0],
+			key:   inps[1],
+			value: inps[2],
+		}, nil
+	case "KEYS":
+		if len(inps) <= 1 {
+			return nil, ErrInvalidArgs
+		}
+		return &command{
+			op:  inps[0],
+			key: inps[1],
+		}, nil
 	default:
 		return nil, ErrInvalidCommand
 	}
@@ -146,6 +201,8 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 func (cli *Client) buildRequest(cmd *command) string {
 
 	switch cmd.op {
+	case "PING":
+		return "GRESP OP PING\n\n"
 	case "GET":
 		return fmt.Sprintf("GRESP OP GET KEY %s\n\n", cmd.key)
 	case "SET":
@@ -153,18 +210,46 @@ func (cli *Client) buildRequest(cmd *command) string {
 		body += fmt.Sprintf("CONTENT_LENGTH %d\n", len(cmd.value))
 		body += fmt.Sprintf("%s\n\n", cmd.value)
 		return body
+	case "DEL":
+		return fmt.Sprintf("GRESP OP DEL KEY %s\n\n", cmd.key)
+	case "PUSH":
+		body := fmt.Sprintf("GRESP OP PUSH KEY %s\n", cmd.key)
+		body += fmt.Sprintf("CONTENT_LENGTH %d\n", len(cmd.value))
+		body += fmt.Sprintf("%s\n\n", cmd.value)
+		return body
+	case "KEYS":
+		return fmt.Sprintf("GRESP OP KEYS KEY %s\n\n", cmd.key)
 	default:
 		return ""
 	}
 
 }
 
-func (cli *Client) parseResponse(response string) string {
+func (cli *Client) parseResponse(op, response string) string {
 
 	lines := strings.Split(response, "\n")
 	if len(lines) < 3 {
 		return "invalid response received from server"
 	}
 
-	return lines[2]
+	meta := strings.Split(lines[0], " ")
+	dt := meta[2]
+
+	switch dt {
+	case "LIST":
+		res := strings.Split(lines[2], ":")
+		return "[" + strings.Join(res, ",") + "]"
+	default:
+		switch op {
+		case "KEYS":
+			ans := ""
+			for _, value := range lines[2:] {
+				ans += fmt.Sprintf("%s\n", value)
+			}
+
+			return strings.TrimSpace(ans)
+		default:
+			return lines[2]
+		}
+	}
 }

@@ -100,7 +100,7 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	value := &Value{}
 	switch dt {
 	case constants.LIST:
-		value.Values = strings.Split(*req.Value, ",")
+		value.Values = strings.Split(*req.Value, ":")
 	case constants.INT:
 		_, err := strconv.Atoi(*req.Value)
 		if err != nil {
@@ -188,13 +188,14 @@ func (kv *KeyValueStore) Get(req request.Request) *response.Response {
 	res := ""
 	switch value.Datatype {
 	case constants.LIST:
-		res = strings.Join(value.Values, ",")
+		res = strings.Join(value.Values, ":")
 	default:
 		res = value.Value
 	}
 
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).
+		WithDatatype(value.Datatype).
 		WithRes(res)
 }
 
@@ -256,10 +257,6 @@ func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 			WithRes("value is missing for pushing to list")
 	}
 
-	if _, ok := kv.store[*req.Key]; !ok {
-		return kv.keyDoesNotExistRes()
-	}
-
 	storedValue := kv.store[*req.Key]
 	if storedValue.Datatype != constants.LIST {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
@@ -271,7 +268,7 @@ func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 	for _, v := range Values {
 		storedValue.Values = append(storedValue.Values, strings.TrimSpace(v))
 	}
-	kv.store[*req.Value] = storedValue
+	kv.store[*req.Key] = storedValue
 
 	return response.WithCode(statuscodes.SUCCESS).
 		WithOk(true).

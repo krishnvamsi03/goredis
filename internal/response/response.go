@@ -1,12 +1,16 @@
 package response
 
-import "fmt"
+import (
+	"fmt"
+	"goredis/internal/utils"
+)
 
 type (
 	Response struct {
-		code string
-		isOk bool
-		res  string
+		code     string
+		isOk     bool
+		res      string
+		datatype string
 	}
 )
 
@@ -29,13 +33,23 @@ func (res *Response) WithRes(result string) *Response {
 	return res
 }
 
+func (res *Response) WithDatatype(datatype string) *Response {
+	res.datatype = datatype
+	return res
+}
+
 func (res *Response) Build() string {
 	isOk := "NOT_OK"
 	if res.isOk {
 		isOk = "OK"
 	}
 
-	response := fmt.Sprintf("GRESP %s %s\nCONTENT_LENGTH %d\n%s\n", isOk, res.code, len(res.res), res.res)
+	defaultDt := "STR"
+	if !utils.IsEmpty(res.datatype) {
+		defaultDt = res.datatype
+	}
+
+	response := fmt.Sprintf("GRESP %s %s %s\nCONTENT_LENGTH %d\n%s\n", isOk, defaultDt, res.code, len(res.res), res.res)
 	return response
 }
 
