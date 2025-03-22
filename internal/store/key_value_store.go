@@ -39,14 +39,6 @@ type (
 	KeyValueStoreOpt func(*KeyValueStore)
 )
 
-var (
-	allowedDataTypes = map[string]struct{}{
-		constants.STR:  {},
-		constants.INT:  {},
-		constants.LIST: {},
-	}
-)
-
 const (
 	KEY_DOES_NOT_EXIST_MSG = "key does not exists or expired"
 )
@@ -91,7 +83,7 @@ func (kv *KeyValueStore) Add(req request.Request) *response.Response {
 	}
 
 	dt := strings.ToUpper(*req.Datatype)
-	if _, ok := allowedDataTypes[dt]; !ok {
+	if _, ok := constants.AllowedDataTypes[dt]; !ok {
 		return response.WithCode(statuscodes.DATA_TYPE_NOT_ALLOWED).
 			WithOk(false).
 			WithRes("data type not supported allowed are str, list, int.")
@@ -161,7 +153,7 @@ func (kv *KeyValueStore) GetKey(req request.Request) *response.Response {
 	keyRe := regexp.MustCompile(fmt.Sprintf("^%s", *req.Key))
 	for key := range kv.store {
 		if keyRe.MatchString(key) {
-			res = fmt.Sprintf("%s\n", key)
+			res += fmt.Sprintf("%s\n", key)
 		}
 	}
 

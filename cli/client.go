@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"goredis/internal/constants"
 	"goredis/internal/tokens"
 	"net"
 	"os"
@@ -160,12 +161,27 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			return nil, ErrInvalidArgs
 		}
 
+		value := []string{}
+
+		i := 2
+		for i < len(inps)-2 {
+			value = append(value, inps[i])
+			i++
+		}
+
+		if _, ok := constants.AllowedDataTypes[strings.ToUpper(inps[i])]; !ok {
+			return nil, ErrInvalidArgs
+		}
+
+		dt := strings.ToUpper(inps[i])
+		i += 1
+
 		return &command{
 			op:       inps[0],
 			key:      inps[1],
-			value:    inps[2],
-			datatype: inps[3],
-			ttl:      inps[4],
+			value:    strings.Join(value, " "),
+			datatype: dt,
+			ttl:      inps[i],
 		}, nil
 	case "DEL":
 		if len(inps) <= 1 {
