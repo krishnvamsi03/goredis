@@ -129,12 +129,8 @@ func (per *Persistent) LoadData() error {
 	}
 
 	ttlTracker := kvData.GetKv().GetTtlTracker()
-
-	if len(kvStoreDeserial) > 0 {
-		per.kvStore.store = kvStoreDeserial
-		if len(ttlTracker) > 0 {
-			per.kvStore.ttlTracker = ttlTracker
-		}
+	if len(kvStoreDeserial) > 0 || len(ttlTracker) > 0 {
+		per.kvStore.LoadFromSnapshot(kvStoreDeserial, ttlTracker)
 		per.logger.Info("successfully loaded data from disk")
 	}
 	return nil
