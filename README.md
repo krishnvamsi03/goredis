@@ -79,7 +79,7 @@ go run cmd/cli/main.go -a localhost -p 6380
 
 | Type   | Description        |
 |--------|--------------------|
-| `STRING` | Single string value |
+| `STR`  | Single string value |
 | `LIST`   | Colon-separated list (e.g. `A:B:C`) |
 | `INT`    | Integer (use with INCR/DECR) |
 
@@ -88,7 +88,7 @@ go run cmd/cli/main.go -a localhost -p 6380
 | Command | Description | Example |
 |---------|-------------|---------|
 | `PING`  | Health check | `PING` |
-| `SET`   | Set key with type and optional TTL | `SET mykey myvalue STRING 300` |
+| `SET`   | Set key with type and optional TTL | `SET mykey myvalue STR 300` |
 | `GET`   | Get value by key | `GET mykey` |
 | `DEL`   | Delete key | `DEL mykey` |
 | `KEYS`  | List keys (supports `*` wildcard) | `KEYS *` |
