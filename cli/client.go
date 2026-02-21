@@ -157,6 +157,7 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			key: inps[1],
 		}, nil
 	case "SET":
+		fmt.Println("inps ", inps)
 		if len(inps) <= 4 {
 			return nil, ErrInvalidArgs
 		}
@@ -169,6 +170,7 @@ func (cli *Client) validateInp(inp string) (*command, error) {
 			i++
 		}
 
+		fmt.Println("INPUS ", inps[i])
 		if _, ok := constants.AllowedDataTypes[strings.ToUpper(inps[i])]; !ok {
 			return nil, ErrInvalidArgs
 		}

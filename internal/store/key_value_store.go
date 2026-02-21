@@ -165,6 +165,12 @@ func (kv *KeyValueStore) GetKey(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Get(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -192,6 +198,12 @@ func (kv *KeyValueStore) Get(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Delete(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -212,6 +224,12 @@ func (kv *KeyValueStore) Delete(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) SetExpiration(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -236,6 +254,18 @@ func (kv *KeyValueStore) SetExpiration(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Push(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
+	if req.Value == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("value is missing for pushing to list")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -243,13 +273,12 @@ func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 
 	response := response.NewResponse()
 
-	if req.Value == nil {
-		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
-			WithOk(false).
-			WithRes("value is missing for pushing to list")
-	}
-
 	storedValue := kv.store[*req.Key]
+	if storedValue == nil {
+		return response.WithCode(statuscodes.KEY_DOES_NOT_EXISTS).
+			WithOk(false).
+			WithRes(KEY_DOES_NOT_EXIST_MSG)
+	}
 	if storedValue.Datatype != constants.LIST {
 		return response.WithCode(statuscodes.OPERATION_NOT_ALLOWED_FOR_DATATYPE).
 			WithOk(false).
@@ -268,17 +297,17 @@ func (kv *KeyValueStore) Push(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
 	kv.deleteKeyAtTime(*req.Key)
 	response := response.NewResponse()
-
-	if req.Value == nil {
-		return response.WithCode(statuscodes.REQUIRED_INP_MISSING).
-			WithOk(false).
-			WithRes("value is missing for pop from list")
-	}
 
 	if _, ok := kv.store[*req.Key]; !ok {
 		return kv.keyDoesNotExistRes()
@@ -291,11 +320,13 @@ func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 			WithRes("pop cannot be performed on Non List type")
 	}
 
-	dir, ele := "", ""
+	dir, ele := "", "1"
 	if req.Value != nil && len(strings.TrimSpace(*req.Value)) > 0 {
-		values := strings.Split(*req.Value, " ")
-		if len(values) > 0 {
+		values := strings.Split(strings.TrimSpace(*req.Value), " ")
+		if len(values) >= 2 {
 			dir, ele = values[0], values[1]
+		} else if len(values) == 1 {
+			dir = values[0]
 		}
 	}
 
@@ -340,6 +371,12 @@ func (kv *KeyValueStore) Pop(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Incr(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -368,6 +405,12 @@ func (kv *KeyValueStore) Incr(req request.Request) *response.Response {
 }
 
 func (kv *KeyValueStore) Decr(req request.Request) *response.Response {
+	if req.Key == nil {
+		return response.NewResponse().
+			WithCode(statuscodes.REQUIRED_INP_MISSING).
+			WithOk(false).
+			WithRes("key is missing")
+	}
 	kv.storeLock.Lock()
 	defer kv.storeLock.Unlock()
 
@@ -421,11 +464,13 @@ func (kv *KeyValueStore) clearExpiredKeys() {
 				kv.ticker.Stop()
 				return
 			case t := <-kv.ticker.C:
+				kv.storeLock.Lock()
 				for key, value := range kv.ttlTracker {
 					if value < t.Unix() {
 						kv.deleteKeys(key)
 					}
 				}
+				kv.storeLock.Unlock()
 			}
 		}
 	}()
@@ -449,6 +494,20 @@ func (kv *KeyValueStore) keyDoesNotExistRes() *response.Response {
 	return response.NewResponse().WithCode(statuscodes.KEY_DOES_NOT_EXISTS).
 		WithOk(false).
 		WithRes(KEY_DOES_NOT_EXIST_MSG)
+}
+
+// LoadFromSnapshot replaces the in-memory store and TTL tracker with the given data.
+// Caller must ensure data is fully deserialized; this method holds the store lock.
+// Nil maps are ignored (not applied).
+func (kv *KeyValueStore) LoadFromSnapshot(store map[string]*Value, ttlTracker map[string]int64) {
+	kv.storeLock.Lock()
+	defer kv.storeLock.Unlock()
+	if store != nil {
+		kv.store = store
+	}
+	if ttlTracker != nil {
+		kv.ttlTracker = ttlTracker
+	}
 }
 
 func (kv *KeyValueStore) Persist(path string) error {

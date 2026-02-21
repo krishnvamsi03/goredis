@@ -30,6 +30,11 @@ func (p *processor) Process(event *Event) {
 		event.conn.Write([]byte(res.Build()))
 		return
 	}
+	if event.cmd == nil {
+		res := response.NewResponse().WithCode(statuscodes.INVALID_PROTOCOL).WithOk(false).WithRes("missing request")
+		event.conn.Write([]byte(res.Build()))
+		return
+	}
 
 	res := p.commandManager.Execute(*event.cmd)
 
